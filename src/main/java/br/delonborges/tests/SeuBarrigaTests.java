@@ -127,6 +127,38 @@ public class SeuBarrigaTests extends BaseTest {
             .body("msg", hasItem("Data da Movimentação deve ser menor ou igual à data atual"));
     }
 
+    @Test
+    public void naoDeveRemoverContaComMovimentacao() {
+        given()
+            .header("Authorization", "JWT " + TOKEN)
+        .when()
+            .delete("/contas/668408")
+        .then()
+            .statusCode(500)
+            .body("constraint", is("transacoes_conta_id_foreign"));
+    }
+
+    @Test
+    public void deveCalcularSaldoContas() {
+        given()
+            .header("Authorization", "JWT " + TOKEN)
+        .when()
+            .get("/saldo")
+        .then()
+            .statusCode(200)
+            .body("find{it.conta_id == 668408}.saldo", is("100.00"));
+    }
+
+    @Test
+    public void deveRemoverMovimentacaoComSucesso() {
+        given()
+            .header("Authorization", "JWT " + TOKEN)
+        .when()
+            .delete("/transacoes/622597")
+        .then()
+            .statusCode(204);
+    }
+
     @NotNull
     private Movimentacao getMovimentacaoValida() {
         Movimentacao movimentacao = new Movimentacao();
