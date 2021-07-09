@@ -2,9 +2,11 @@ package br.delonborges.tests;
 
 import br.delonborges.common.BaseTest;
 import br.delonborges.dto.Movimentacao;
+import br.delonborges.utils.DataUtils;
+import io.restassured.RestAssured;
+import io.restassured.specification.FilterableRequestSpecification;
 import org.jetbrains.annotations.NotNull;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,17 +14,20 @@ import java.util.Map;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
+@TestMethodOrder(MethodOrderer.MethodName.class)
 public class SeuBarrigaTests extends BaseTest {
 
-    private String TOKEN;
+    private static Integer CONTA_ID;
+    private static Integer MOVIMENTACAO_ID;
+    private static final String CONTA_NOME = "Conta " + System.nanoTime();
 
-    @BeforeEach
-    public void login() {
+    @BeforeAll
+    public static void login() {
         Map<String, String> login = new HashMap<>();
         login.put("email", "delon@borges.com");
         login.put("senha", "delonborges");
 
-        TOKEN = given()
+        String token = given()
             .body(login)
         .when()
             .post("/signin")
@@ -30,45 +35,38 @@ public class SeuBarrigaTests extends BaseTest {
             .statusCode(200)
             .extract()
                 .path("token");
+
+        RestAssured.requestSpecification.header("Authorization", "JWT " + token);
     }
 
     @Test
-    public void naoDeveAcessarSemToken() {
-        given()
-        .when()
-            .get("/contas")
-        .then()
-            .statusCode(401);
-    }
-
-    @Test
-    public void deveIncluirContaComSucesso() {
-        given()
-            .header("Authorization", "JWT " + TOKEN)
-            .body("{\"nome\": \"Conta do Delon\"}\n")
+    public void t01_deveIncluirContaComSucesso() {
+        CONTA_ID = given()
+            .body("{\"nome\": \"" + CONTA_NOME + "\"}\n")
         .when()
             .post("/contas")
         .then()
-            .statusCode(201);
+            .statusCode(201)
+            .extract()
+                .path("id");
     }
 
     @Test
-    public void deveAlterarContaComSucesso() {
+    public void t02_deveAlterarContaComSucesso() {
         given()
-            .header("Authorization", "JWT " + TOKEN)
-            .body("{\"nome\": \"Conta alterada do Delon\"}\n")
+            .body("{\"nome\": \"" + CONTA_NOME + " alterada\"}\n")
+            .pathParam("id", CONTA_ID)
         .when()
-            .put("/contas/668408")
+            .put("/contas/{id}")
         .then()
             .statusCode(200)
-            .body("nome", is("Conta alterada do Delon"));
+            .body("nome", is(CONTA_NOME + " alterada"));
     }
 
     @Test
-    public void naoDeveIncluirContaComMesmoNome() {
+    public void t03_naoDeveIncluirContaComMesmoNome() {
         given()
-            .header("Authorization", "JWT " + TOKEN)
-            .body("{\"nome\": \"Conta alterada do Delon\"}\n")
+            .body("{\"nome\": \"" + CONTA_NOME + " alterada\"}\n")
         .when()
             .post("/contas")
         .then()
@@ -77,22 +75,22 @@ public class SeuBarrigaTests extends BaseTest {
     }
 
     @Test
-    public void deveInserirMovimentacaoComSucesso() {
+    public void t04_deveInserirMovimentacaoComSucesso() {
         Movimentacao movimentacao = getMovimentacaoValida();
 
-        given()
-            .header("Authorization", "JWT " + TOKEN)
+        MOVIMENTACAO_ID = given()
             .body(movimentacao)
         .when()
             .post("/transacoes")
         .then()
-            .statusCode(201);
+            .statusCode(201)
+            .extract()
+                .path("id");
     }
 
     @Test
-    public void deveValidarCamposObrigatoriosMovimentacao() {
+    public void t05_deveValidarCamposObrigatoriosMovimentacao() {
         given()
-            .header("Authorization", "JWT " + TOKEN)
             .body("{}")
         .when()
             .post("/transacoes")
@@ -112,12 +110,11 @@ public class SeuBarrigaTests extends BaseTest {
     }
 
     @Test
-    public void naoDeveInserirMovimentacaoComDataFutura() {
+    public void t06_naoDeveInserirMovimentacaoComDataFutura() {
         Movimentacao movimentacao = getMovimentacaoValida();
-        movimentacao.setData_transacao("01/01/2100");
+        movimentacao.setData_transacao(DataUtils.getDataAndAddDays(5));
 
         given()
-            .header("Authorization", "JWT " + TOKEN)
             .body(movimentacao)
         .when()
             .post("/transacoes")
@@ -128,46 +125,58 @@ public class SeuBarrigaTests extends BaseTest {
     }
 
     @Test
-    public void naoDeveRemoverContaComMovimentacao() {
+    public void t07_naoDeveRemoverContaComMovimentacao() {
         given()
-            .header("Authorization", "JWT " + TOKEN)
+            .pathParam("id", CONTA_ID)
         .when()
-            .delete("/contas/668408")
+            .delete("/contas/{id}")
         .then()
             .statusCode(500)
             .body("constraint", is("transacoes_conta_id_foreign"));
     }
 
     @Test
-    public void deveCalcularSaldoContas() {
+    public void t08_deveCalcularSaldoContas() {
         given()
-            .header("Authorization", "JWT " + TOKEN)
         .when()
             .get("/saldo")
         .then()
             .statusCode(200)
-            .body("find{it.conta_id == 668408}.saldo", is("100.00"));
+            .body("find{it.conta_id == " + CONTA_ID + "}.saldo", is("100.00"));
     }
 
     @Test
-    public void deveRemoverMovimentacaoComSucesso() {
+    public void t09_deveRemoverMovimentacaoComSucesso() {
         given()
-            .header("Authorization", "JWT " + TOKEN)
+            .pathParam("id", MOVIMENTACAO_ID)
         .when()
-            .delete("/transacoes/622597")
+            .delete("/transacoes/{id}")
         .then()
             .statusCode(204);
     }
 
+    @Test
+    public void t10_naoDeveAcessarSemToken() {
+        FilterableRequestSpecification filterableRequestSpecification = (FilterableRequestSpecification) RestAssured.requestSpecification;
+        filterableRequestSpecification.removeHeader("Authorization");
+
+        given()
+        .when()
+            .get("/contas")
+        .then()
+            .statusCode(401);
+    }
+
+
     @NotNull
     private Movimentacao getMovimentacaoValida() {
         Movimentacao movimentacao = new Movimentacao();
-        movimentacao.setConta_id(668408);
+        movimentacao.setConta_id(CONTA_ID);
         movimentacao.setDescricao("Descrição da movimentação");
         movimentacao.setEnvolvido("Envolvido na movimentação");
         movimentacao.setTipo("REC");
-        movimentacao.setData_transacao("01/01/2010");
-        movimentacao.setData_pagamento("01/01/2020");
+        movimentacao.setData_transacao(DataUtils.getDataAndAddDays(0));
+        movimentacao.setData_pagamento(DataUtils.getDataAndAddDays(10));
         movimentacao.setValor(100f);
         movimentacao.setStatus(true);
         return movimentacao;
