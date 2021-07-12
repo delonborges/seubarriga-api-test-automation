@@ -23,7 +23,7 @@ Efetue a instalação das dependências (os testes serão iniciados também):
 ```
 mvn install
 ```
-Ou, efetue a instalação das depêndencias, sem a execução dos testes:
+Ou, efetue a instalação das dependências, sem a execução dos testes:
 ```
 mvn install -DskipTests
 ```
