@@ -4,10 +4,10 @@ import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.BeforeClass;
 
 public class BaseTest implements Constants {
-    @BeforeAll
+    @BeforeClass
     public static void SetUp() {
         RestAssured.baseURI = APP_BASE_URL;
         RestAssured.port = APP_PORT;
